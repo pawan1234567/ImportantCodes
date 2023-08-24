@@ -1,0 +1,31 @@
+
+set kubeconfig="C:\Users\pawkumar\Documents\code\software\Kube\.kube\config"
+
+kubectl config use-context cluster-uat6-token
+
+namespaces=$(kubectl get namespaces -o custom-columns=NAME:.metadata.name --no-headers)
+
+
+for namespace in $namespaces; do
+   
+    pod=$(kubectl get pods -n "$namespace" -o custom-columns=POD:.metadata.name --no-headers | grep '^.*bank.*')
+	
+	kubectl port-forward "$pod" 7001:8080 --namespace "$namespace" &
+	
+	sleep 5
+	
+	if jobs -r | grep -q "Running"; then
+	
+	echo "$namespace : $pod"
+	
+	 curl -X GET http://localhost:7001/bankConfig/setting/getSettings/s3_archive_name
+	 
+	 pid=$!
+	 
+	 kill -9 $pid
+	
+	fi
+
+
+
+done
