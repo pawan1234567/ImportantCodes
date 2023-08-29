@@ -1,31 +1,60 @@
+#!/bin/bash
+##################################################################################################################################
+##    Documentation at                                                                                                          ##
+##    https://bitbucket.ilendx.tech/projects/CRED/repos/reporting-queries/browse/documentation/bank-setting-all-namespace.md    ##
+##################################################################################################################################
 
-set kubeconfig="C:\Users\pawkumar\Documents\code\software\Kube\.kube\config"
+# Exit on any command failure
+set -e
 
-kubectl config use-context cluster-uat6-token
+# Trap to clean up background jobs when the script exits
+trap "kill 0" EXIT
 
+# Set the kubeconfig path
+export KUBECONFIG=""
+
+# Switch the Kubernetes context
+kubectl config use-context kublr-prod6-cluster-aws-w2-token
+
+# Define the setting you want to retrieve
+setting_name=""
+
+# Get the namespaces
 namespaces=$(kubectl get namespaces -o custom-columns=NAME:.metadata.name --no-headers)
 
+# Define the CSV file
+output_file="bank_config.csv"
 
+# Write the CSV header
+echo "namespace,$setting_name" > $output_file
+
+# Iterate through the namespaces
 for namespace in $namespaces; do
-   
-    pod=$(kubectl get pods -n "$namespace" -o custom-columns=POD:.metadata.name --no-headers | grep '^.*bank.*')
-	
-	kubectl port-forward "$pod" 7001:8080 --namespace "$namespace" &
-	
-	sleep 5
-	
-	if jobs -r | grep -q "Running"; then
-	
-	echo "$namespace : $pod"
-	
-	 curl -X GET http://localhost:7001/bankConfig/setting/getSettings/s3_archive_name
-	 
-	 pid=$!
-	 
-	 kill -9 $pid
-	
-	fi
+    # Get the pods matching the pattern 'bank'
+    pod=$(kubectl get pods -n "$namespace" -o custom-columns=POD:.metadata.name --no-headers | grep 'bank')
 
+    # Start port-forwarding for the pod
+    kubectl port-forward "$pod" 7001:8080 --namespace "$namespace" &
 
+    # Capture the PID of the port-forwarding command
+    pid=$!
 
+    # Wait for a few seconds to ensure port-forwarding is set up
+    sleep 5
+
+    # Check if the port-forwarding command is still running
+    if jobs -r | grep -q "Running"; then
+        echo "Processing: $namespace : $pod"
+
+        # Get the specified setting
+        setting_value=$(curl -X GET http://localhost:7001/bankConfig/setting/getSettings/$setting_name)
+
+        # Write to the CSV file
+        echo "$namespace,$setting_value" >> $output_file
+
+        # Kill the port-forwarding command
+        kill -9 $pid
+    fi
 done
+
+echo "CSV file has been created at $output_file"
