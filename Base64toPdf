@@ -1,0 +1,1 @@
+cat ./encoded.txt | base64 -d > ap.pdf
